@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RETRO//OS - LO-FI CASSETTE & WEATHER RADAR WORKSTATION</title>
+  
+  <!-- Font Pixel Google -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="retro-canvas"></canvas>
+  <div class="retro-pillar pillar-right"></div>
+
+  <!-- SIDEBAR DOCK KIRI -->
+  <aside class="retro-dock" id="retro-dock">
+    <div class="dock-logo">
+      <div class="dock-badge">🕹️</div>
+      <span class="dock-title">CYBER//OS</span>
+    </div>
+
+    <nav class="dock-nav">
+      <button class="dock-item active" id="tab-music-btn" title="Tape Deck Music Player">
+        <span class="dock-icon">📼</span>
+        <span class="dock-label">MUSIC DECK</span>
+      </button>
+
+      <button class="dock-item" id="tab-weather-btn" title="Global Weather Radar">
+        <span class="dock-icon">📡</span>
+        <span class="dock-label">WEATHER RADAR</span>
+      </button>
+    </nav>
+
+    <div class="dock-footer">
+      <div class="dock-status-dot" title="Network Synchronized"></div>
+      <span class="dock-version">SYS 1989.v8</span>
+    </div>
+  </aside>
+
+  <div class="app-viewport">
+    
+    <!-- Header Banner -->
+    <header class="main-title-header">
+      <div class="title-banner">
+        <span class="banner-gem g-left">🕹️</span>
+        <h1 class="pixel-title" id="page-hero-title">RETRO//WAVE</h1>
+        <span class="banner-gem g-right">📼</span>
+      </div>
+      <div class="title-sub">
+        <span class="author-tag" id="page-hero-subtitle">FM STEREO CASSETTE // WORKSTATION</span>
+      </div>
+    </header>
+
+    <!-- VIEW 1: MUSIC DECK -->
+    <section class="view-section view-active" id="view-music">
+      <div class="dashboard-container">
+        
+        <!-- PANEL KIRI: ANALOG TUNER, AMBIENCE & PITCH -->
+        <aside class="side-panel left-panel">
+          <div class="corner-metal c-tl"></div>
+          <div class="corner-metal c-tr"></div>
+          <div class="corner-metal c-bl"></div>
+          <div class="corner-metal c-br"></div>
+
+          <div class="panel-header">
+            <span>📻 [ ANALOG TUNER ]</span>
+          </div>
+
+          <div class="ambience-controls">
+            <div class="amb-track">
+              <div class="amb-info">
+                <button class="amb-toggle-btn" id="rain-btn" data-active="false">🌧️ NEON RAIN</button>
+                <span class="amb-stat" id="rain-stat">OFF</span>
+              </div>
+              <input type="range" class="amb-slider" id="rain-vol" min="0" max="1" step="0.05" value="0.5" />
+            </div>
+
+            <div class="amb-track">
+              <div class="amb-info">
+                <button class="amb-toggle-btn" id="fire-btn" data-active="false">📼 TAPE HISS</button>
+                <span class="amb-stat" id="fire-stat">OFF</span>
+              </div>
+              <input type="range" class="amb-slider" id="fire-vol" min="0" max="1" step="0.05" value="0.5" />
+            </div>
+
+            <div class="amb-track">
+              <div class="amb-info">
+                <button class="amb-toggle-btn" id="cricket-btn" data-active="false">🌆 MIDNIGHT FM</button>
+                <span class="amb-stat" id="cricket-stat">OFF</span>
+              </div>
+              <input type="range" class="amb-slider" id="cricket-vol" min="0" max="1" step="0.05" value="0.5" />
+            </div>
+          </div>
+
+          <!-- Tape Speed Pitch Slider -->
+          <div class="tape-pitch-box">
+            <div class="pitch-header">
+              <span>⚡ TAPE SPEED (PITCH)</span>
+              <span id="pitch-val">1.00x</span>
+            </div>
+            <input type="range" id="pitch-slider" min="0.80" max="1.20" step="0.05" value="1.00" />
+            <div class="pitch-presets">
+              <button class="pitch-btn" id="btn-slowed">SLOW</button>
+              <button class="pitch-btn" id="btn-normal">NORM</button>
+              <button class="pitch-btn" id="btn-speed">FAST</button>
+            </div>
+          </div>
+
+          <!-- Status Hi-Fi -->
+          <div class="adventurer-box">
+            <div class="char-header">
+              <span class="char-icon">🎛️</span>
+              <div class="char-title">
+                <span class="char-name">HI-FI TUNER</span>
+                <span class="char-level">DOLBY B-NR // 104.5 MHz</span>
+              </div>
+            </div>
+
+            <div class="char-bars">
+              <div class="bar-row">
+                <span>BASS</span>
+                <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+              </div>
+              <div class="bar-row">
+                <span>TREBLE</span>
+                <div class="bar-bg"><div class="bar-fill mp-fill"></div></div>
+              </div>
+            </div>
+
+            <p class="tavern-dialogue">"Analog memories drifting through neon twilight. Fast forward or rewind at will."</p>
+          </div>
+        </aside>
+
+        <!-- PANEL TENGAH: CASSETTE DECK -->
+        <main class="relic-frame">
+          <div class="corner-metal c-tl"></div>
+          <div class="corner-metal c-tr"></div>
+          <div class="corner-metal c-bl"></div>
+          <div class="corner-metal c-br"></div>
+
+          <header class="relic-header">
+            <div class="gem-badge">
+              <span class="rune-gem" id="rune-gem"></span>
+              <span class="relic-title">CASSETTE//TAPE-07</span>
+            </div>
+            <div class="track-index" id="track-badge">01/07</div>
+          </header>
+
+          <!-- Frame GIF Pixel & Drop Zone Audio/GIF -->
+          <section class="screen-chassis">
+            <div class="screen-bezel" id="drop-zone">
+              <div class="media-container crt-active" id="screen-container">
+                <img id="cover-art" src="med1.gif" alt="Retro Pixel Art" onerror="this.src='https://placehold.co/400x250/140a24/00f0ff?text=RETRO+LO-FI'" />
+                <div class="crt-scanlines"></div>
+                <button class="crt-toggle-btn" id="crt-toggle">CRT: ON</button>
+                <div class="sigil-stamp">[ DROP MP3/GIF ]</div>
+              </div>
+              <div class="visualizer-wrapper">
+                <canvas id="visualizer-canvas"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <!-- Judul Lagu -->
+          <section class="scroll-banner">
+            <div class="scroll-icon">📼</div>
+            <div class="scroll-text">
+              <h2 id="song-title">Softy</h2>
+              <p id="artist-name">HIDEAWAY FEAT. MONDO LOOPS</p>
+            </div>
+          </section>
+
+          <!-- Timeline Audio -->
+          <section class="timeline-box">
+            <div class="progress-track" id="progress-bar">
+              <div class="progress-bar-fill" id="progress-fill">
+                <div class="seeker-dot"></div>
+              </div>
+            </div>
+            <div class="time-meta">
+              <span id="current-time">00:00</span>
+              <span class="status-mode" id="sys-state">STANDBY</span>
+              <span id="total-duration">00:00</span>
+            </div>
+          </section>
+
+          <!-- Tombol Pemutar Kaset -->
+          <section class="controls-grid">
+            <button class="relic-btn btn-mode" id="shuffle-btn" title="Shuffle">
+              <svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+            </button>
+
+            <button class="relic-btn btn-nav" id="prev-btn" title="Rewind">
+              <svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+            </button>
+
+            <button class="relic-btn btn-play" id="play-btn" title="Play / Stop">
+              <div id="play-icon">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </button>
+
+            <button class="relic-btn btn-nav" id="next-btn" title="Fast Forward">
+              <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+            </button>
+
+            <button class="relic-btn btn-mode" id="loop-btn" title="Continuous Loop">
+              <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+            </button>
+          </section>
+
+          <!-- Volume -->
+          <footer class="relic-footer">
+            <div class="vol-control">
+              <span class="vol-icon">🎚️</span>
+              <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="0.75" />
+            </div>
+            <div class="tavern-seal">ANALOG 1989 // STEREO</div>
+          </footer>
+        </main>
+
+        <!-- PANEL KANAN: CLOCK & DAFTAR TRACK -->
+        <aside class="side-panel right-panel">
+          <div class="corner-metal c-tl"></div>
+          <div class="corner-metal c-tr"></div>
+          <div class="corner-metal c-bl"></div>
+          <div class="corner-metal c-br"></div>
+
+          <div class="clock-box">
+            <div class="clock-display" id="pixel-clock">00:00:00</div>
+            <div class="clock-date" id="timer-label">RETRO CITY 1989</div>
+            <div class="timer-controls">
+              <button class="timer-btn active" id="btn-mode-clock">CLOCK</button>
+              <button class="timer-btn" id="btn-mode-pomo">POMO 25M</button>
+              <button class="timer-btn" id="btn-mode-sleep">SLEEP 45M</button>
+            </div>
+          </div>
+
+          <div class="playlist-header">
+            <span class="header-tag">📜 [ TAVERN QUESTS ]</span>
+            <span class="header-count" id="track-count">SIDE A // 7 TRK</span>
+          </div>
+          <ul class="quest-tracks" id="track-list-ui"></ul>
+        </aside>
+      </div>
+    </section>
+
+    <!-- VIEW 2: WEATHER RADAR WORKSTATION -->
+    <section class="view-section" id="view-weather">
+      <div class="weather-workstation">
+        
+        <!-- Radar Top Grid -->
+        <div class="radar-top-grid">
+          
+          <!-- Radar Screen Box dengan Latar GIF dan Sapuan Garis Radar -->
+          <div class="radar-screen-box">
+            <div class="corner-metal c-tl"></div>
+            <div class="corner-metal c-tr"></div>
+            <div class="corner-metal c-bl"></div>
+            <div class="corner-metal c-br"></div>
+
+            <div class="panel-header">
+              <span>📡 [ SATELLITE RADAR SCOPE ]</span>
+              <span class="monitor-tag">LIVE ATMOSPHERE</span>
+            </div>
+
+            <!-- Kontainer Radar dengan GIF dan Canvas Transparan -->
+            <div class="radar-scope-container" id="radar-drop-zone">
+              <img id="radar-bg-gif" src="med1.gif" alt="Radar Atmosphere" onerror="this.src='https://placehold.co/400x250/140a24/00f0ff?text=RADAR+ATMOSPHERE'" />
+              <canvas id="radar-canvas"></canvas>
+              
+              <div class="radar-scope-overlay">
+                <span id="radar-range-display">RNG: 0 KM (ORIGIN)</span>
+                <span id="radar-scan-stat">● SWEEPING</span>
+              </div>
+
+              <div class="radar-gif-caption">
+                <span id="radar-gif-title">JAKARTA METROPOLIS RAIN</span>
+                <span class="radar-gif-hint">[ DROP CUSTOM GIF ]</span>
+              </div>
+            </div>
+
+            <!-- Tombol Pemilih 4 Negara -->
+            <div class="city-picker-row">
+              <button class="city-tab-btn active" data-city="jakarta">JAKARTA</button>
+              <button class="city-tab-btn" data-city="tokyo">TOKYO</button>
+              <button class="city-tab-btn" data-city="swiss">ZURICH</button>
+              <button class="city-tab-btn" data-city="china">BEIJING</button>
+            </div>
+          </div>
+
+          <!-- Telemetri Lengkap Cuaca Realtime -->
+          <div class="weather-detail-panel">
+            <div class="corner-metal c-tl"></div>
+            <div class="corner-metal c-tr"></div>
+            <div class="corner-metal c-bl"></div>
+            <div class="corner-metal c-br"></div>
+
+            <div class="panel-header">
+              <span>🛰️ [ METEOROLOGICAL TELEMETRY ]</span>
+              <button class="btn-geo-origin" id="btn-detect-gps" title="Gunakan GPS Asli Laptop/HP">📍 ORIGIN: JKT</button>
+            </div>
+
+            <div class="detail-hero-box">
+              <div class="hero-weather-left">
+                <span class="hero-weather-icon" id="hero-icon">☀️</span>
+                <div>
+                  <div class="hero-weather-temp" id="hero-temp">--°C</div>
+                  <div class="hero-city-title" id="hero-city">JAKARTA, INDONESIA</div>
+                </div>
+              </div>
+              <div class="hero-weather-right">
+                <span class="hero-condition-pill" id="hero-desc">SCANNING DATA...</span>
+                <span class="hero-coords" id="hero-coords">LAT: -6.21° / LON: 106.85°</span>
+              </div>
+            </div>
+
+            <!-- Telemetry 4-Gauges -->
+            <div class="metrics-telemetry-grid">
+              <div class="telemetry-card">
+                <span class="t-label">WIND VELOCITY</span>
+                <span class="t-val" id="tele-wind">-- KM/H</span>
+                <span class="t-sub" id="tele-wind-dir">DIR: 120° SSE</span>
+              </div>
+              <div class="telemetry-card">
+                <span class="t-label">HUMIDITY</span>
+                <span class="t-val" id="tele-humid">-- %</span>
+                <span class="t-sub">DEW POINT: STABLE</span>
+              </div>
+              <div class="telemetry-card">
+                <span class="t-label">FLIGHT ETA</span>
+                <span class="t-val" id="range-eta">0h 00m</span>
+                <span class="t-sub" id="range-bearing">BEARING: 000° N</span>
+              </div>
+              <div class="telemetry-card">
+                <span class="t-label">CLOUD COVER</span>
+                <span class="t-val" id="tele-cloud">-- %</span>
+                <span class="t-sub">VISIBILITY: OPTIMAL</span>
+              </div>
+            </div>
+
+            <div class="weather-brief-box">
+              <span class="brief-badge">🤖</span>
+              <p class="brief-text" id="weather-tip-text">
+                "Synchronizing with Open-Meteo orbital feed. Atmosphere parameters calibrated for lo-fi listening."
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Kotak Ringkasan Cuaca Bawah -->
+        <div class="forecast-cards-row">
+          <div class="city-summary-card selected" data-city="jakarta">
+            <div class="c-card-top">
+              <span class="c-card-name">JAKARTA (ID)</span>
+              <span class="c-card-icon" id="card-icon-jakarta">☀️</span>
+            </div>
+            <div class="c-card-temp" id="card-temp-jakarta">--°C</div>
+            <div class="c-card-desc" id="card-desc-jakarta">FETCHING...</div>
+          </div>
+
+          <div class="city-summary-card" data-city="tokyo">
+            <div class="c-card-top">
+              <span class="c-card-name">TOKYO (JP)</span>
+              <span class="c-card-icon" id="card-icon-tokyo">🌤️</span>
+            </div>
+            <div class="c-card-temp" id="card-temp-tokyo">--°C</div>
+            <div class="c-card-desc" id="card-desc-tokyo">FETCHING...</div>
+          </div>
+
+          <div class="city-summary-card" data-city="swiss">
+            <div class="c-card-top">
+              <span class="c-card-name">ZURICH (CH)</span>
+              <span class="c-card-icon" id="card-icon-swiss">❄️</span>
+            </div>
+            <div class="c-card-temp" id="card-temp-swiss">--°C</div>
+            <div class="c-card-desc" id="card-desc-swiss">FETCHING...</div>
+          </div>
+
+          <div class="city-summary-card" data-city="china">
+            <div class="c-card-top">
+              <span class="c-card-name">BEIJING (CN)</span>
+              <span class="c-card-icon" id="card-icon-china">☁️</span>
+            </div>
+            <div class="c-card-temp" id="card-temp-china">--°C</div>
+            <div class="c-card-desc" id="card-desc-china">FETCHING...</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Hidden audio element -->
+    <audio id="audio-element"></audio>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
