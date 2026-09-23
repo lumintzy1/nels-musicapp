@@ -1,0 +1,14 @@
+{
+  "name": "coolwinds-lofi-weather-radar",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'No build step required'",
+    "lint": "echo 'No lint check needed'"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

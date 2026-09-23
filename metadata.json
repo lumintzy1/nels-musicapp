@@ -1,0 +1,8 @@
+{
+  "name": "Retro OS - Lo-Fi Cassette & Weather Radar Workstation",
+  "description": "Retro wave aesthetic workstation with functional lo-fi cassette deck and weather radar visualization.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
