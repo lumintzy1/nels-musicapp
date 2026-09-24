@@ -2264,11 +2264,9 @@ function loadYtTrack(index) {
   titleEl.textContent = track.title;
   artistEl.textContent = track.artist.toUpperCase();
   
-  if (track.thumbnail) {
-    coverImg.src = track.thumbnail;
-  } else {
-    coverImg.src = 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22250%22 viewBox=%220 0 400 250%22><rect width=%22400%22 height=%22250%22 fill=%22%23140a24%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%2300f0ff%22 font-family=%22monospace%22 font-size=%2216%22>YOUTUBE LO-FI</text></svg>';
-  }
+  // Keep retro pixel GIF animation on cassette screen when playing YT Music
+  const retroGifs = ["med1.gif", "med2.gif", "med3.gif", "med4.gif", "med5.gif", "med6.gif", "med7.gif"];
+  coverImg.src = retroGifs[index % retroGifs.length];
   
   trackBadge.textContent = `${String(index + 1).padStart(2, '0')}/${String(ytPlaylist.length).padStart(2, '0')}`;
   progressFill.style.width = '0%';

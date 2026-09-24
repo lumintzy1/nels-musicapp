@@ -287,7 +287,7 @@ app.get('/api/search', async (req, res) => {
       try {
         console.log(`Performing Gemini YouTube Music Search Grounding for: "${query}"`);
         const response = await ai.models.generateContent({
-          model: "gemini-3.8-flash",
+          model: "gemini-2.5-flash",
           contents: `Search specifically on YouTube Music (music.youtube.com) for official studio audio releases, song tracks, or official releases matching the query: "${query}". 
 Ensure you return official music/song releases rather than generic video uploads. Find 5 highly relevant tracks.
 For each, retrieve its 11-character YouTube Video ID, clean song title, clean artist name, and duration.
