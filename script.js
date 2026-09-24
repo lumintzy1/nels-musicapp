@@ -47,6 +47,13 @@ let currentIndex = 0;
 let isShuffle = false;
 let isLoop = false;
 
+// YouTube Music streaming integration state
+let currentSource = 'local'; // 'local' or 'youtube'
+let ytPlayer = null;
+let ytPlayerReady = false;
+let ytPlaylist = [];
+let ytCurrentIndex = 0;
+
 // DOM Elements Deck Audio
 const audio = document.getElementById('audio-element');
 const playBtn = document.getElementById('play-btn');
@@ -94,6 +101,29 @@ function play8BitBeep(freq = 440, duration = 0.06, type = 'square') {
   } catch (e) {}
 }
 
+function playGameOverSynth() {
+  try {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    
+    // Deeper pitch-falling sweep downwards for dramatic game over feel
+    osc.frequency.setValueAtTime(160, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.65);
+    
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.65);
+  } catch (e) {
+    play8BitBeep(120, 0.4, 'sawtooth');
+  }
+}
+
 function formatTime(sec) {
   if (isNaN(sec)) return "00:00";
   const m = Math.floor(sec / 60);
@@ -101,38 +131,77 @@ function formatTime(sec) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// Navigasi Tampilan (Music Deck / Weather Radar)
+// Global Game state variables (declared at top to avoid Temporal Dead Zone ReferenceErrors)
+let activeGame = 'snake'; // 'snake', 'tetris', 'invaders'
+let gameRunning = false;
+let gamePaused = false;
+let gameLoopId = null;
+let gameScore = 0;
+let gameLevel = 1;
+let systemDifficulty = 'normal'; // 'easy', 'normal', 'hard'
+
+const highScores = {
+  snake: 0,
+  tetris: 0,
+  invaders: 0
+};
+
+// Load scores
+if (localStorage.getItem('arcade_hi_snake')) highScores.snake = parseInt(localStorage.getItem('arcade_hi_snake')) || 0;
+if (localStorage.getItem('arcade_hi_tetris')) highScores.tetris = parseInt(localStorage.getItem('arcade_hi_tetris')) || 0;
+if (localStorage.getItem('arcade_hi_invaders')) highScores.invaders = parseInt(localStorage.getItem('arcade_hi_invaders')) || 0;
+
+// Navigasi Tampilan (Music Deck / Weather Radar / Mini Games)
 const tabMusicBtn = document.getElementById('tab-music-btn');
 const tabWeatherBtn = document.getElementById('tab-weather-btn');
+const tabGamesBtn = document.getElementById('tab-games-btn');
 const viewMusic = document.getElementById('view-music');
 const viewWeather = document.getElementById('view-weather');
+const viewGames = document.getElementById('view-games');
 const pageHeroTitle = document.getElementById('page-hero-title');
 const pageHeroSubtitle = document.getElementById('page-hero-subtitle');
 
 function switchView(viewName) {
   play8BitBeep(640, 0.08);
+  
+  // Reset all tabs & views
+  if (tabMusicBtn) tabMusicBtn.classList.remove('active');
+  if (tabWeatherBtn) tabWeatherBtn.classList.remove('active');
+  if (tabGamesBtn) tabGamesBtn.classList.remove('active');
+  if (viewMusic) viewMusic.classList.remove('view-active');
+  if (viewWeather) viewWeather.classList.remove('view-active');
+  if (viewGames) viewGames.classList.remove('view-active');
+  
+  // Stop running game loops when switching tabs
+  stopAllGames();
+  
   if (viewName === 'music') {
-    tabMusicBtn.classList.add('active');
-    tabWeatherBtn.classList.remove('active');
-    viewMusic.classList.add('view-active');
-    viewWeather.classList.remove('view-active');
-    pageHeroTitle.textContent = "RETRO//WAVE";
-    pageHeroSubtitle.textContent = "FM STEREO CASSETTE // WORKSTATION";
-  } else {
-    tabWeatherBtn.classList.add('active');
-    tabMusicBtn.classList.remove('active');
-    viewWeather.classList.add('view-active');
-    viewMusic.classList.remove('view-active');
-    pageHeroTitle.textContent = "WEATHER//RADAR";
-    pageHeroSubtitle.textContent = "ORBITAL TELEMETRY & DISTANCE SCAN";
+    if (tabMusicBtn) tabMusicBtn.classList.add('active');
+    if (viewMusic) viewMusic.classList.add('view-active');
+    if (pageHeroTitle) pageHeroTitle.textContent = "RETRO//WAVE";
+    if (pageHeroSubtitle) pageHeroSubtitle.textContent = "FM STEREO CASSETTE // WORKSTATION";
+  } else if (viewName === 'weather') {
+    if (tabWeatherBtn) tabWeatherBtn.classList.add('active');
+    if (viewWeather) viewWeather.classList.add('view-active');
+    if (pageHeroTitle) pageHeroTitle.textContent = "WEATHER//RADAR";
+    if (pageHeroSubtitle) pageHeroSubtitle.textContent = "ORBITAL TELEMETRY & DISTANCE SCAN";
     setTimeout(() => {
       resizeRadarCanvas();
+    }, 50);
+  } else if (viewName === 'games') {
+    if (tabGamesBtn) tabGamesBtn.classList.add('active');
+    if (viewGames) viewGames.classList.add('view-active');
+    if (pageHeroTitle) pageHeroTitle.textContent = "RETRO//ARCADE";
+    if (pageHeroSubtitle) pageHeroSubtitle.textContent = "8-BIT SYNTH GAMING WORKSTATION";
+    setTimeout(() => {
+      initSelectedGame();
     }, 50);
   }
 }
 
 tabMusicBtn.addEventListener('click', () => switchView('music'));
 tabWeatherBtn.addEventListener('click', () => switchView('weather'));
+tabGamesBtn.addEventListener('click', () => switchView('games'));
 
 // Media Session API
 function updateMediaSession() {
@@ -180,6 +249,13 @@ function renderPlaylist() {
 }
 
 function loadTrack(index) {
+  currentSource = 'local';
+  if (ytPlayerReady && ytPlayer) {
+    try {
+      ytPlayer.pauseVideo();
+    } catch(e){}
+  }
+  
   const track = playlist[index];
   titleEl.textContent = track.title;
   artistEl.textContent = track.artist.toUpperCase();
@@ -190,6 +266,7 @@ function loadTrack(index) {
   currentTimeEl.textContent = "00:00";
   renderPlaylist();
   updateMediaSession();
+  renderYtPlaylistUI(); // Redraw online list to clear highlights
 }
 
 function updatePlayState(playing) {
@@ -206,32 +283,65 @@ function updatePlayState(playing) {
 
 function togglePlay() {
   play8BitBeep(480, 0.07);
-  if (audio.paused) {
-    audio.play().then(() => updatePlayState(true)).catch(err => console.log(err));
+  if (currentSource === 'local') {
+    if (audio.paused) {
+      audio.play().then(() => updatePlayState(true)).catch(err => console.log(err));
+    } else {
+      audio.pause();
+      updatePlayState(false);
+    }
   } else {
-    audio.pause();
-    updatePlayState(false);
+    if (ytPlayerReady && ytPlayer) {
+      try {
+        const state = ytPlayer.getPlayerState();
+        if (state === 1) { // YT.PlayerState.PLAYING
+          ytPlayer.pauseVideo();
+          updatePlayState(false);
+        } else {
+          ytPlayer.playVideo();
+          updatePlayState(true);
+        }
+      } catch (e) {}
+    }
   }
 }
 
 function nextTrack() {
   play8BitBeep(580, 0.05);
-  if (isShuffle) {
-    currentIndex = Math.floor(Math.random() * playlist.length);
+  if (currentSource === 'local') {
+    if (isShuffle) {
+      currentIndex = Math.floor(Math.random() * playlist.length);
+    } else {
+      currentIndex = (currentIndex + 1) % playlist.length;
+    }
+    loadTrack(currentIndex);
+    audio.play();
+    updatePlayState(true);
   } else {
-    currentIndex = (currentIndex + 1) % playlist.length;
+    if (ytPlaylist.length > 0) {
+      if (isShuffle) {
+        ytCurrentIndex = Math.floor(Math.random() * ytPlaylist.length);
+      } else {
+        ytCurrentIndex = (ytCurrentIndex + 1) % ytPlaylist.length;
+      }
+      loadYtTrack(ytCurrentIndex);
+    }
   }
-  loadTrack(currentIndex);
-  audio.play();
-  updatePlayState(true);
 }
 
 function prevTrack() {
   play8BitBeep(390, 0.05);
-  currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
-  loadTrack(currentIndex);
-  audio.play();
-  updatePlayState(true);
+  if (currentSource === 'local') {
+    currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+    loadTrack(currentIndex);
+    audio.play();
+    updatePlayState(true);
+  } else {
+    if (ytPlaylist.length > 0) {
+      ytCurrentIndex = (ytCurrentIndex - 1 + ytPlaylist.length) % ytPlaylist.length;
+      loadYtTrack(ytCurrentIndex);
+    }
+  }
 }
 
 playBtn.addEventListener('click', togglePlay);
@@ -260,11 +370,13 @@ audio.addEventListener('ended', () => {
 });
 
 audio.addEventListener('loadedmetadata', () => {
-  totalDurationEl.textContent = formatTime(audio.duration);
+  if (currentSource === 'local') {
+    totalDurationEl.textContent = formatTime(audio.duration);
+  }
 });
 
 audio.addEventListener('timeupdate', () => {
-  if (!isNaN(audio.duration)) {
+  if (currentSource === 'local' && !isNaN(audio.duration)) {
     const percent = (audio.currentTime / audio.duration) * 100;
     progressFill.style.width = `${percent}%`;
     currentTimeEl.textContent = formatTime(audio.currentTime);
@@ -276,8 +388,20 @@ progressBar.addEventListener('click', (e) => {
   play8BitBeep(300, 0.05);
   const rect = progressBar.getBoundingClientRect();
   const clickPos = (e.clientX - rect.left) / rect.width;
-  if (!isNaN(audio.duration)) {
-    audio.currentTime = clickPos * audio.duration;
+  
+  if (currentSource === 'local') {
+    if (!isNaN(audio.duration)) {
+      audio.currentTime = clickPos * audio.duration;
+    }
+  } else {
+    if (ytPlayerReady && ytPlayer) {
+      try {
+        const duration = ytPlayer.getDuration();
+        if (duration > 0) {
+          ytPlayer.seekTo(clickPos * duration, true);
+        }
+      } catch (e) {}
+    }
   }
 });
 
@@ -986,6 +1110,12 @@ function drawRadarScope() {
   const cy = radarCanvas.height / 2;
   const maxR = Math.min(cx, cy) - 12;
 
+  // Safety Guard: prevent negative or zero radius which throws IndexSizeError on some browers
+  if (maxR <= 0) {
+    requestAnimationFrame(drawRadarScope);
+    return;
+  }
+
   // Garis Lingkaran Radar
   rdCtx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
   rdCtx.lineWidth = 1;
@@ -1048,7 +1178,1189 @@ function drawRadarScope() {
 }
 drawRadarScope();
 
-// Inisialisasi awal
+// ============================================================================
+//                       RETRO MINI GAMES ENGINE (CYBER//OS)
+// ============================================================================
+
+const gCanvas = document.getElementById('game-canvas');
+const gCtx = gCanvas ? gCanvas.getContext('2d') : null;
+const gOverlay = document.getElementById('game-overlay');
+const gOverlayTitle = document.getElementById('overlay-title');
+const gOverlayInstructions = document.getElementById('overlay-instructions');
+const gOverlayStartBtn = document.getElementById('btn-overlay-start');
+const gScoreVal = document.getElementById('game-score');
+const gHiScoreVal = document.getElementById('game-hi-score');
+const gLevelVal = document.getElementById('game-level');
+const gRuneGem = document.getElementById('game-rune-gem');
+const gPanelTitle = document.getElementById('game-panel-title');
+const gToggleRunBtn = document.getElementById('btn-game-toggle-run');
+const gToggleRunIcon = document.getElementById('game-toggle-icon');
+const gInstructionsBox = document.getElementById('game-instructions-box');
+const gUserLeaderboardScore = document.getElementById('user-leaderboard-score');
+
+// Game state variables moved to top of file to avoid TDZ ReferenceErrors
+
+// Game 1: Snake Variables
+let snake = [];
+let snakeDir = { x: 1, y: 0 };
+let snakeNextDir = { x: 1, y: 0 };
+let food = { x: 0, y: 0 };
+let snakeSpeed = 130;
+let snakeTrail = [];
+let snakeLength = 15;
+
+// Game 2: Tetris Variables
+const TETRIS_COLS = 10;
+const TETRIS_ROWS = 20;
+let tetrisGrid = [];
+let currentPiece = null;
+let tetrisTickTime = 800;
+
+const TETROMINOES = {
+  I: { shape: [[1,1,1,1]], color: '#00f0ff' },
+  O: { shape: [[1,1],[1,1]], color: '#ffaa00' },
+  T: { shape: [[0,1,0],[1,1,1]], color: '#ff2a85' },
+  S: { shape: [[0,1,1],[1,1,0]], color: '#00ff88' },
+  Z: { shape: [[1,1,0],[0,1,1]], color: '#fbe6ff' },
+  J: { shape: [[1,0,0],[1,1,1]], color: '#9d4edd' },
+  L: { shape: [[0,0,1],[1,1,1]], color: '#ff5500' }
+};
+
+// Game 3: Space Invaders (Defender) Variables
+let playerX = 180;
+let playerLasers = [];
+let alienLasers = [];
+let aliens = [];
+let alienDirection = 1;
+let alienSpeed = 0.7;
+
+function initSelectedGame() {
+  stopAllGames();
+  gameRunning = false;
+  gamePaused = false;
+  gameScore = 0;
+  gameLevel = 1;
+  updateScoreUI();
+  
+  if (activeGame === 'snake') {
+    if (gPanelTitle) gPanelTitle.textContent = "NEON SERPENT";
+    if (gOverlayTitle) gOverlayTitle.textContent = "NEON SERPENT";
+    if (gOverlayInstructions) gOverlayInstructions.innerHTML = "COLLECT GLOWING ENERGY NODES<br><br>[ SPACE ] OR START TO RUN";
+    if (gInstructionsBox) gInstructionsBox.innerHTML = `
+      🐍 NEON SERPENT:<br>
+      - ARROW KEYS to slide neon serpent.<br>
+      - Eat glowing nodes to grow & score.<br>
+      - Avoid walls and your own tail!<br>
+      - Mobile: Use D-pad buttons below.
+    `;
+    initSnakeGame();
+  } else if (activeGame === 'tetris') {
+    if (gPanelTitle) gPanelTitle.textContent = "BLOCK STACKER";
+    if (gOverlayTitle) gOverlayTitle.textContent = "BLOCK STACKER";
+    if (gOverlayInstructions) gOverlayInstructions.innerHTML = "STACK BLOCKS & CLEAR LINES<br><br>[ SPACE ] OR START TO RUN";
+    if (gInstructionsBox) gInstructionsBox.innerHTML = `
+      🧱 BLOCK STACKER:<br>
+      - LEFT/RIGHT ARROW to move.<br>
+      - UP ARROW / BUTTON A to rotate.<br>
+      - DOWN ARROW to soft drop.<br>
+      - SPACEBAR / BUTTON B to hard drop.<br>
+      - Clear rows to score bonus points.
+    `;
+    initTetrisGame();
+  } else if (activeGame === 'invaders') {
+    if (gPanelTitle) gPanelTitle.textContent = "NEON DEFENDER";
+    if (gOverlayTitle) gOverlayTitle.textContent = "NEON DEFENDER";
+    if (gOverlayInstructions) gOverlayInstructions.innerHTML = "DEFEND THE SYSTEM CORE<br><br>[ SPACE ] OR START TO RUN";
+    if (gInstructionsBox) gInstructionsBox.innerHTML = `
+      🚀 NEON DEFENDER:<br>
+      - LEFT/RIGHT ARROW to move ship.<br>
+      - SPACEBAR / BUTTON A / B to shoot.<br>
+      - Obliterate incoming invaders.<br>
+      - Do not let them reach the bottom!
+    `;
+    initInvadersGame();
+  }
+  
+  if (gOverlay) gOverlay.style.display = 'flex';
+  if (gToggleRunIcon) gToggleRunIcon.textContent = "START";
+  if (gRuneGem) gRuneGem.classList.remove('active');
+  
+  drawGame();
+}
+
+// -----------------------------------------------------
+// GAME 1: NEON SERPENT MECHANICS (SMOOTH SLITHER.IO WORM PHYSICS)
+// -----------------------------------------------------
+function initSnakeGame() {
+  const startX = 200;
+  const startY = 170;
+  
+  // Starting segments list in exact pixel coordinates
+  snake = [];
+  for (let i = 0; i < 15; i++) {
+    snake.push({ x: startX - i * 10, y: startY });
+  }
+  
+  // Trail history list in exact pixel coordinates
+  snakeTrail = [];
+  for (let i = 0; i < 300; i++) {
+    snakeTrail.push({ x: startX - i * 1.5, y: startY });
+  }
+  
+  snakeLength = 15;
+  snakeDir = { x: 1, y: 0 };
+  snakeNextDir = { x: 1, y: 0 };
+  
+  // Base speed in pixels per frame
+  const baseSpeed = systemDifficulty === 'easy' ? 2.0 : (systemDifficulty === 'hard' ? 3.8 : (systemDifficulty === 'turbo' ? 5.8 : 2.8));
+  snakeSpeed = baseSpeed;
+  
+  placeFood();
+}
+
+function placeFood() {
+  const margin = 20;
+  const width = 400;
+  const height = 340;
+  let onSnake = true;
+  
+  while (onSnake) {
+    food = {
+      x: margin + Math.random() * (width - margin * 2),
+      y: margin + Math.random() * (height - margin * 2)
+    };
+    // Ensure food doesn't spawn directly on top of snake segments
+    onSnake = snake.some(part => Math.hypot(part.x - food.x, part.y - food.y) < 22);
+  }
+}
+
+function tickSnake() {
+  // Smoothly turn towards target direction (gives a beautiful realistic slither.io turning curvature)
+  const turnRate = 0.22;
+  snakeDir.x += (snakeNextDir.x - snakeDir.x) * turnRate;
+  snakeDir.y += (snakeNextDir.y - snakeDir.y) * turnRate;
+  
+  // Keep the movement vector normalized
+  const len = Math.hypot(snakeDir.x, snakeDir.y);
+  if (len > 0) {
+    snakeDir.x /= len;
+    snakeDir.y /= len;
+  }
+  
+  // Calculate new head position
+  const currentHead = snake[0];
+  const newHead = {
+    x: currentHead.x + snakeDir.x * snakeSpeed,
+    y: currentHead.y + snakeDir.y * snakeSpeed
+  };
+  
+  // Collision: Arena bounds boundary checks
+  const margin = 8;
+  const width = 400;
+  const height = 340;
+  if (newHead.x < margin || newHead.x > width - margin || newHead.y < margin || newHead.y > height - margin) {
+    gameOver();
+    return;
+  }
+  
+  // Collision: Self-bite checks (only check segments starting from index 14 to avoid head-neck overlaps)
+  const collisionRadius = 8;
+  for (let i = 14; i < snake.length; i++) {
+    const dist = Math.hypot(newHead.x - snake[i].x, newHead.y - snake[i].y);
+    if (dist < collisionRadius) {
+      gameOver();
+      return;
+    }
+  }
+  
+  // Update trail history
+  snakeTrail.unshift({ x: newHead.x, y: newHead.y });
+  if (snakeTrail.length > 2000) {
+    snakeTrail.pop();
+  }
+  
+  // Build snake segments from the trail at fixed 10px physical distances
+  const segmentDistance = 10;
+  const newSnake = [ { x: newHead.x, y: newHead.y } ];
+  let trailIdx = 0;
+  let currentSearchPos = { x: newHead.x, y: newHead.y };
+  
+  for (let i = 1; i < snakeLength; i++) {
+    let found = false;
+    while (trailIdx < snakeTrail.length) {
+      const pt = snakeTrail[trailIdx];
+      const dist = Math.hypot(pt.x - currentSearchPos.x, pt.y - currentSearchPos.y);
+      if (dist >= segmentDistance) {
+        newSnake.push({ x: pt.x, y: pt.y });
+        currentSearchPos = { x: pt.x, y: pt.y };
+        found = true;
+        break;
+      }
+      trailIdx++;
+    }
+    if (!found) {
+      const lastPt = snakeTrail[snakeTrail.length - 1] || newHead;
+      newSnake.push({ x: lastPt.x, y: lastPt.y });
+    }
+  }
+  snake = newSnake;
+  
+  // Collision: Eat glowing food
+  const foodEatRadius = 16;
+  const foodDist = Math.hypot(newHead.x - food.x, newHead.y - food.y);
+  if (foodDist < foodEatRadius) {
+    gameScore += 100;
+    
+    // Satisfying ascending 8-bit retro synth arpeggio
+    play8BitBeep(880, 0.04, 'square');
+    setTimeout(() => play8BitBeep(1320, 0.06, 'triangle'), 40);
+    
+    placeFood();
+    
+    // Grow the worm!
+    snakeLength += 2;
+    
+    // Speed up slightly as you grow
+    snakeSpeed = Math.min(5.0, snakeSpeed + 0.1);
+    
+    if (gameScore % 500 === 0) {
+      gameLevel++;
+      play8BitBeep(1200, 0.15, 'triangle');
+    }
+    updateScoreUI();
+  }
+}
+
+// -----------------------------------------------------
+// GAME 2: BLOCK STACKER (TETRIS) MECHANICS
+// -----------------------------------------------------
+function initTetrisGame() {
+  tetrisGrid = Array.from({ length: TETRIS_ROWS }, () => Array(TETRIS_COLS).fill(0));
+  gameScore = 0;
+  gameLevel = 1;
+  spawnTetromino();
+  tetrisTickTime = systemDifficulty === 'easy' ? 1000 : (systemDifficulty === 'hard' ? 500 : (systemDifficulty === 'turbo' ? 220 : 800));
+}
+
+function spawnTetromino() {
+  const keys = Object.keys(TETROMINOES);
+  const nextType = keys[Math.floor(Math.random() * keys.length)];
+  const pieceData = TETROMINOES[nextType];
+  currentPiece = {
+    shape: JSON.parse(JSON.stringify(pieceData.shape)),
+    color: pieceData.color,
+    x: Math.floor((TETRIS_COLS - pieceData.shape[0].length) / 2),
+    y: 0
+  };
+  
+  if (checkCollision(currentPiece.x, currentPiece.y, currentPiece.shape)) {
+    gameOver();
+  }
+}
+
+function checkCollision(px, py, shape) {
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (shape[r][c] !== 0) {
+        const gridX = px + c;
+        const gridY = py + r;
+        if (gridX < 0 || gridX >= TETRIS_COLS || gridY >= TETRIS_ROWS) {
+          return true;
+        }
+        if (gridY >= 0 && tetrisGrid[gridY][gridX] !== 0) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function rotatePiece() {
+  const shape = currentPiece.shape;
+  const N = shape.length;
+  const M = shape[0].length;
+  const rotated = Array.from({ length: M }, () => Array(N).fill(0));
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < M; c++) {
+      rotated[c][N - 1 - r] = shape[r][c];
+    }
+  }
+  if (!checkCollision(currentPiece.x, currentPiece.y, rotated)) {
+    currentPiece.shape = rotated;
+    play8BitBeep(400, 0.04);
+  }
+}
+
+function movePiece(dir) {
+  if (!checkCollision(currentPiece.x + dir, currentPiece.y, currentPiece.shape)) {
+    currentPiece.x += dir;
+    play8BitBeep(300, 0.03);
+  }
+}
+
+function dropPiece() {
+  if (!checkCollision(currentPiece.x, currentPiece.y + 1, currentPiece.shape)) {
+    currentPiece.y++;
+  } else {
+    lockPiece();
+  }
+}
+
+function hardDrop() {
+  while (!checkCollision(currentPiece.x, currentPiece.y + 1, currentPiece.shape)) {
+    currentPiece.y++;
+  }
+  lockPiece();
+  play8BitBeep(180, 0.08);
+}
+
+function lockPiece() {
+  const shape = currentPiece.shape;
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (shape[r][c] !== 0) {
+        if (currentPiece.y + r >= 0) {
+          tetrisGrid[currentPiece.y + r][currentPiece.x + c] = currentPiece.color;
+        }
+      }
+    }
+  }
+  clearLines();
+  spawnTetromino();
+}
+
+function clearLines() {
+  let linesCleared = 0;
+  for (let r = TETRIS_ROWS - 1; r >= 0; r--) {
+    if (tetrisGrid[r].every(val => val !== 0)) {
+      tetrisGrid.splice(r, 1);
+      tetrisGrid.unshift(Array(TETRIS_COLS).fill(0));
+      linesCleared++;
+      r++;
+    }
+  }
+  if (linesCleared > 0) {
+    const rewards = [0, 100, 300, 500, 800];
+    gameScore += rewards[linesCleared] * gameLevel;
+    play8BitBeep(600, 0.12, 'sawtooth');
+    
+    if (gameScore >= gameLevel * 1500) {
+      gameLevel++;
+      tetrisTickTime = Math.max(100, tetrisTickTime - 100);
+      play8BitBeep(1000, 0.2, 'sine');
+    }
+    updateScoreUI();
+  }
+}
+
+// -----------------------------------------------------
+// GAME 3: NEON DEFENDER (SPACE INVADERS) MECHANICS
+// -----------------------------------------------------
+function initInvadersGame() {
+  playerX = 180;
+  playerLasers = [];
+  alienLasers = [];
+  aliens = [];
+  alienDirection = 1;
+  
+  const baseSpeed = systemDifficulty === 'easy' ? 0.4 : (systemDifficulty === 'hard' ? 1.0 : (systemDifficulty === 'turbo' ? 1.7 : 0.7));
+  alienSpeed = baseSpeed;
+  
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 6; c++) {
+      aliens.push({
+        x: 40 + c * 50,
+        y: 40 + r * 35,
+        width: 24,
+        height: 16,
+        alive: true,
+        type: r
+      });
+    }
+  }
+}
+
+function shootInvaderLaser() {
+  if (playerLasers.length >= 3) return;
+  playerLasers.push({
+    x: playerX + 12,
+    y: 310,
+    speed: 6
+  });
+  play8BitBeep(900, 0.05, 'triangle');
+}
+
+function tickInvaders() {
+  for (let i = playerLasers.length - 1; i >= 0; i--) {
+    playerLasers[i].y -= playerLasers[i].speed;
+    if (playerLasers[i].y < 0) {
+      playerLasers.splice(i, 1);
+    }
+  }
+
+  for (let i = alienLasers.length - 1; i >= 0; i--) {
+    alienLasers[i].y += alienLasers[i].speed;
+    if (alienLasers[i].y >= 315 && alienLasers[i].y <= 330 && alienLasers[i].x >= playerX && alienLasers[i].x <= playerX + 25) {
+      play8BitBeep(120, 0.3, 'sawtooth');
+      gameOver();
+      return;
+    }
+    if (alienLasers[i].y > 350) {
+      alienLasers.splice(i, 1);
+    }
+  }
+
+  let hitWall = false;
+  let activeAliens = aliens.filter(a => a.alive);
+  
+  if (activeAliens.length === 0) {
+    gameLevel++;
+    gameScore += 500;
+    play8BitBeep(1100, 0.25, 'triangle');
+    initInvadersGame();
+    alienSpeed += 0.25;
+    updateScoreUI();
+    return;
+  }
+
+  activeAliens.forEach(alien => {
+    alien.x += alienSpeed * alienDirection;
+    if (alien.x < 10 || alien.x > 365) {
+      hitWall = true;
+    }
+    if (alien.y >= 300) {
+      gameOver();
+    }
+  });
+
+  if (hitWall) {
+    alienDirection *= -1;
+    aliens.forEach(alien => {
+      alien.y += 15;
+    });
+  }
+
+  for (let l = playerLasers.length - 1; l >= 0; l--) {
+    const laser = playerLasers[l];
+    let hit = false;
+    for (let a = 0; a < aliens.length; a++) {
+      const alien = aliens[a];
+      if (alien.alive && laser.x >= alien.x && laser.x <= alien.x + alien.width && laser.y >= alien.y && laser.y <= alien.y + alien.height) {
+        alien.alive = false;
+        hit = true;
+        playerLasers.splice(l, 1);
+        gameScore += (3 - alien.type) * 100;
+        play8BitBeep(220, 0.08, 'sawtooth');
+        updateScoreUI();
+        break;
+      }
+    }
+  }
+
+  if (Math.random() < 0.015 + (gameLevel * 0.005) && activeAliens.length > 0) {
+    const randomAlien = activeAliens[Math.floor(Math.random() * activeAliens.length)];
+    alienLasers.push({
+      x: randomAlien.x + randomAlien.width / 2,
+      y: randomAlien.y + randomAlien.height,
+      speed: 3 + (gameLevel * 0.5)
+    });
+  }
+}
+
+// -----------------------------------------------------
+// CORE DRAW / CANVAS RENDERER
+// -----------------------------------------------------
+function drawGame() {
+  if (!gCtx) return;
+  
+  gCtx.fillStyle = '#090512';
+  gCtx.fillRect(0, 0, gCanvas.width, gCanvas.height);
+  
+  // Grid visual helper
+  gCtx.strokeStyle = 'rgba(255, 42, 133, 0.03)';
+  gCtx.lineWidth = 1;
+  const spacing = 20;
+  for (let x = 0; x < gCanvas.width; x += spacing) {
+    gCtx.beginPath();
+    gCtx.moveTo(x, 0);
+    gCtx.lineTo(x, gCanvas.height);
+    gCtx.stroke();
+  }
+  for (let y = 0; y < gCanvas.height; y += spacing) {
+    gCtx.beginPath();
+    gCtx.moveTo(0, y);
+    gCtx.lineTo(gCanvas.width, y);
+    gCtx.stroke();
+  }
+
+  if (activeGame === 'snake') {
+    // Glowing pulsate food (plasma gem)
+    const pulseScale = 1 + 0.15 * Math.sin(Date.now() / 120);
+    gCtx.fillStyle = '#ff2a85';
+    gCtx.shadowColor = '#ff2a85';
+    gCtx.shadowBlur = 14 * pulseScale;
+    gCtx.beginPath();
+    gCtx.arc(food.x, food.y, 8 * pulseScale, 0, Math.PI * 2);
+    gCtx.fill();
+    gCtx.shadowBlur = 0;
+
+    // First draw the inner spine connecting lines to make the serpent look like one single connected realistic biological/cybernetic creature
+    gCtx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+    gCtx.lineWidth = 14;
+    gCtx.lineCap = 'round';
+    gCtx.lineJoin = 'round';
+    gCtx.beginPath();
+    snake.forEach((part, idx) => {
+      if (idx === 0) {
+        gCtx.moveTo(part.x, part.y);
+      } else {
+        gCtx.lineTo(part.x, part.y);
+      }
+    });
+    gCtx.stroke();
+
+    // Now draw the gorgeous layered overlapping 3D gradient beads/segments of the serpent (from tail to head for correct overlap depth)
+    for (let idx = snake.length - 1; idx >= 0; idx--) {
+      const part = snake[idx];
+      if (!part) continue;
+
+      const x = part.x;
+      const y = part.y;
+      
+      // Organic tapering: segments scale down smoothly towards the tail
+      const baseRadius = 9; // ~18px thickness
+      const r = baseRadius * (1 - (idx / snake.length) * 0.45); // Head is full size, tail is tapered
+
+      if (idx === 0) {
+        // DRAW HEAD - Cybernetic Neon Cobra head
+        gCtx.fillStyle = '#00f0ff';
+        gCtx.shadowColor = '#00f0ff';
+        gCtx.shadowBlur = 12;
+        gCtx.beginPath();
+        gCtx.arc(x, y, r + 1.5, 0, Math.PI * 2);
+        gCtx.fill();
+        gCtx.shadowBlur = 0;
+
+        // Draw animated eyes that look in the direction the snake is moving
+        let eyeLeft = { x: x, y: y };
+        let eyeRight = { x: x, y: y };
+        
+        let angle = 0;
+        if (snake.length > 1) {
+          angle = Math.atan2(snake[0].y - snake[1].y, snake[0].x - snake[1].x);
+        } else {
+          angle = Math.atan2(snakeDir.y, snakeDir.x);
+        }
+
+        const eyeOffsetAngle = 0.5; // ~30 degrees outward
+        const eyeDist = 6;
+        eyeLeft.x = x + Math.cos(angle - eyeOffsetAngle) * eyeDist;
+        eyeLeft.y = y + Math.sin(angle - eyeOffsetAngle) * eyeDist;
+        eyeRight.x = x + Math.cos(angle + eyeOffsetAngle) * eyeDist;
+        eyeRight.y = y + Math.sin(angle + eyeOffsetAngle) * eyeDist;
+
+        // Draw glowing golden eyes of the realistic neon serpent
+        gCtx.fillStyle = '#ffea00';
+        gCtx.beginPath();
+        gCtx.arc(eyeLeft.x, eyeLeft.y, 2.5, 0, Math.PI * 2);
+        gCtx.arc(eyeRight.x, eyeRight.y, 2.5, 0, Math.PI * 2);
+        gCtx.fill();
+
+        // Draw tiny subtle nostrils
+        gCtx.fillStyle = '#00aaff';
+        gCtx.beginPath();
+        gCtx.arc(x + Math.cos(angle) * 8 - Math.sin(angle) * 2, y + Math.sin(angle) * 8 + Math.cos(angle) * 2, 1, 0, Math.PI * 2);
+        gCtx.arc(x + Math.cos(angle) * 8 + Math.sin(angle) * 2, y + Math.sin(angle) * 8 - Math.cos(angle) * 2, 1, 0, Math.PI * 2);
+        gCtx.fill();
+
+      } else {
+        // DRAW BODY SEGMENTS - Glossy 3D glass beads with radial neon shading (skin alternates between cyan and pink like premium slither skins!)
+        const alpha = Math.max(0.45, 1 - (idx / snake.length));
+        
+        // Offset radial gradient for a gorgeous glossy 3D shiny light refraction
+        const radGrad = gCtx.createRadialGradient(
+          x - r * 0.25, y - r * 0.25, r * 0.1,
+          x, y, r
+        );
+        
+        const isEven = idx % 2 === 0;
+        const mainColor = isEven ? '0, 240, 255' : '255, 42, 133';
+        const darkColor = isEven ? '0, 100, 180' : '150, 0, 70';
+        
+        radGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+        radGrad.addColorStop(0.3, `rgba(${mainColor}, ${alpha})`);
+        radGrad.addColorStop(0.8, `rgba(${darkColor}, ${alpha * 0.9})`);
+        radGrad.addColorStop(1, `rgba(10, 5, 30, ${alpha * 0.8})`);
+
+        gCtx.fillStyle = radGrad;
+        gCtx.beginPath();
+        gCtx.arc(x, y, r, 0, Math.PI * 2);
+        gCtx.fill();
+
+        // Draw an inner core glow on each bead
+        gCtx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.45})`;
+        gCtx.beginPath();
+        gCtx.arc(x - r * 0.15, y - r * 0.15, r * 0.2, 0, Math.PI * 2);
+        gCtx.fill();
+      }
+    }
+    gCtx.shadowBlur = 0;
+
+  } else if (activeGame === 'tetris') {
+    const blockW = 16;
+    const offsetX = Math.floor((gCanvas.width - TETRIS_COLS * blockW) / 2);
+    const offsetY = Math.floor((gCanvas.height - TETRIS_ROWS * blockW) / 2);
+
+    gCtx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+    gCtx.lineWidth = 2;
+    gCtx.strokeRect(offsetX - 2, offsetY - 2, TETRIS_COLS * blockW + 4, TETRIS_ROWS * blockW + 4);
+    gCtx.fillStyle = '#05020a';
+    gCtx.fillRect(offsetX, offsetY, TETRIS_COLS * blockW, TETRIS_ROWS * blockW);
+
+    for (let r = 0; r < TETRIS_ROWS; r++) {
+      for (let c = 0; c < TETRIS_COLS; c++) {
+        if (tetrisGrid[r][c] !== 0) {
+          gCtx.fillStyle = tetrisGrid[r][c];
+          gCtx.fillRect(offsetX + c * blockW + 1, offsetY + r * blockW + 1, blockW - 2, blockW - 2);
+        }
+      }
+    }
+
+    if (currentPiece) {
+      gCtx.fillStyle = currentPiece.color;
+      gCtx.shadowColor = currentPiece.color;
+      gCtx.shadowBlur = 6;
+      const shape = currentPiece.shape;
+      for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[r].length; c++) {
+          if (shape[r][c] !== 0) {
+            const pieceY = currentPiece.y + r;
+            if (pieceY >= 0) {
+              gCtx.fillRect(offsetX + (currentPiece.x + c) * blockW + 1, offsetY + pieceY * blockW + 1, blockW - 2, blockW - 2);
+            }
+          }
+        }
+      }
+      gCtx.shadowBlur = 0;
+    }
+
+  } else if (activeGame === 'invaders') {
+    // Ship
+    gCtx.fillStyle = '#00f0ff';
+    gCtx.shadowColor = '#00f0ff';
+    gCtx.shadowBlur = 10;
+    gCtx.beginPath();
+    gCtx.moveTo(playerX + 12, 312);
+    gCtx.lineTo(playerX, 325);
+    gCtx.lineTo(playerX + 25, 325);
+    gCtx.closePath();
+    gCtx.fill();
+    gCtx.shadowBlur = 0;
+
+    // Aliens
+    const alienColors = ['#ff2a85', '#ffaa00', '#00ff88'];
+    aliens.forEach(alien => {
+      if (alien.alive) {
+        gCtx.fillStyle = alienColors[alien.type];
+        gCtx.fillRect(alien.x, alien.y, alien.width, alien.height);
+        
+        gCtx.fillStyle = '#05020a';
+        gCtx.fillRect(alien.x + 4, alien.y + 4, 4, 4);
+        gCtx.fillRect(alien.x + alien.width - 8, alien.y + 4, 4, 4);
+      }
+    });
+
+    // Player Lasers
+    gCtx.fillStyle = '#00ff88';
+    gCtx.shadowColor = '#00ff88';
+    gCtx.shadowBlur = 6;
+    playerLasers.forEach(laser => {
+      gCtx.fillRect(laser.x - 1, laser.y, 3, 10);
+    });
+    gCtx.shadowBlur = 0;
+
+    // Enemy Lasers
+    gCtx.fillStyle = '#ff2a85';
+    gCtx.shadowColor = '#ff2a85';
+    gCtx.shadowBlur = 6;
+    alienLasers.forEach(laser => {
+      gCtx.fillRect(laser.x - 1, laser.y, 3, 10);
+    });
+    gCtx.shadowBlur = 0;
+  }
+}
+
+// -----------------------------------------------------
+// GAME CONTROL ENGINE
+// -----------------------------------------------------
+function startGameLoop() {
+  if (gameLoopId) stopAllGames();
+  
+  // Re-initialize variables and setup clean board if starting from a clean slate or game-over
+  if (!gameRunning) {
+    initSelectedGame();
+  }
+  
+  gameRunning = true;
+  gamePaused = false;
+  if (gOverlay) gOverlay.style.display = 'none';
+  if (gToggleRunIcon) gToggleRunIcon.textContent = "PAUSE";
+  if (gRuneGem) gRuneGem.classList.add('active');
+  play8BitBeep(780, 0.1, 'sine');
+  
+  let lastTick = 0;
+  
+  function loop(timestamp) {
+    if (!gameRunning || gamePaused) return;
+    
+    let interval = 100;
+    if (activeGame === 'snake') {
+      interval = snakeSpeed;
+    } else if (activeGame === 'tetris') {
+      interval = tetrisTickTime;
+    } else if (activeGame === 'invaders') {
+      interval = 25;
+    }
+    
+    if (timestamp - lastTick >= interval) {
+      lastTick = timestamp;
+      if (activeGame === 'snake') {
+        tickSnake();
+      } else if (activeGame === 'tetris') {
+        dropPiece();
+      }
+    }
+    
+    if (activeGame === 'invaders') {
+      tickInvaders();
+    }
+    
+    drawGame();
+    gameLoopId = requestAnimationFrame(loop);
+  }
+  
+  gameLoopId = requestAnimationFrame(loop);
+}
+
+function stopAllGames() {
+  if (gameLoopId) {
+    cancelAnimationFrame(gameLoopId);
+    gameLoopId = null;
+  }
+}
+
+function toggleGamePause() {
+  if (!gameRunning) {
+    startGameLoop();
+    return;
+  }
+  
+  play8BitBeep(320, 0.05);
+  gamePaused = !gamePaused;
+  if (gamePaused) {
+    gOverlayTitle.textContent = "PAUSED";
+    gOverlayInstructions.innerHTML = "PRESS START OR SPACEBAR TO RESUME";
+    gOverlay.style.display = 'flex';
+    gToggleRunIcon.textContent = "RESUME";
+    gRuneGem.classList.remove('active');
+  } else {
+    gOverlay.style.display = 'none';
+    gToggleRunIcon.textContent = "PAUSE";
+    gRuneGem.classList.add('active');
+    startGameLoop();
+  }
+}
+
+function gameOver() {
+  stopAllGames();
+  gameRunning = false;
+  playGameOverSynth();
+  
+  if (gameScore > highScores[activeGame]) {
+    highScores[activeGame] = gameScore;
+    localStorage.setItem(`arcade_hi_${activeGame}`, gameScore);
+  }
+  
+  gOverlayTitle.textContent = "GAME OVER";
+  gOverlayInstructions.innerHTML = `FINAL SCORE: ${String(gameScore).padStart(4, '0')}<br><br>PRESS START TO RETRY`;
+  gOverlay.style.display = 'flex';
+  gToggleRunIcon.textContent = "RETRY";
+  gRuneGem.classList.remove('active');
+  updateScoreUI();
+}
+
+function updateScoreUI() {
+  if (gScoreVal) gScoreVal.textContent = String(gameScore).padStart(4, '0');
+  if (gHiScoreVal) gHiScoreVal.textContent = String(highScores[activeGame]).padStart(4, '0');
+  if (gLevelVal) gLevelVal.textContent = String(gameLevel).padStart(2, '0');
+  
+  const highBadge = document.getElementById('game-high-badge');
+  if (highBadge) highBadge.textContent = `HI: ${String(highScores[activeGame]).padStart(4, '0')}`;
+  
+  if (gUserLeaderboardScore) gUserLeaderboardScore.textContent = `${highScores[activeGame]} pts`;
+}
+
+function handleGameInput(key) {
+  if (key === ' ' || key === 'Spacebar' || key === 'Enter') {
+    if (!gameRunning || gamePaused) {
+      startGameLoop();
+    } else {
+      if (activeGame === 'tetris') {
+        hardDrop();
+      } else if (activeGame === 'invaders') {
+        shootInvaderLaser();
+      }
+    }
+    return;
+  }
+  
+  if (!gameRunning || gamePaused) return;
+  
+  if (activeGame === 'snake') {
+    if ((key === 'ArrowUp' || key === 'w') && snakeDir.y !== 1) {
+      snakeNextDir = { x: 0, y: -1 };
+    } else if ((key === 'ArrowDown' || key === 's') && snakeDir.y !== -1) {
+      snakeNextDir = { x: 0, y: 1 };
+    } else if ((key === 'ArrowLeft' || key === 'a') && snakeDir.x !== 1) {
+      snakeNextDir = { x: -1, y: 0 };
+    } else if ((key === 'ArrowRight' || key === 'd') && snakeDir.x !== -1) {
+      snakeNextDir = { x: 1, y: 0 };
+    }
+  } else if (activeGame === 'tetris') {
+    if (key === 'ArrowLeft' || key === 'a') {
+      movePiece(-1);
+    } else if (key === 'ArrowRight' || key === 'd') {
+      movePiece(1);
+    } else if (key === 'ArrowUp' || key === 'w') {
+      rotatePiece();
+    } else if (key === 'ArrowDown' || key === 's') {
+      dropPiece();
+    }
+  } else if (activeGame === 'invaders') {
+    if (key === 'ArrowLeft' || key === 'a') {
+      playerX = Math.max(10, playerX - 15);
+      play8BitBeep(450, 0.02, 'sine');
+    } else if (key === 'ArrowRight' || key === 'd') {
+      playerX = Math.min(365, playerX + 15);
+      play8BitBeep(450, 0.02, 'sine');
+    }
+  }
+}
+
+// Global Keyboard listener
+document.addEventListener('keydown', (e) => {
+  if (viewGames && viewGames.classList.contains('view-active')) {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
+      e.preventDefault();
+    }
+    handleGameInput(e.key);
+  }
+});
+
+// Selector and controller binding
+const btnSelectSnake = document.getElementById('btn-select-snake');
+const btnSelectTetris = document.getElementById('btn-select-tetris');
+const btnSelectInvaders = document.getElementById('btn-select-invaders');
+
+function changeActiveGame(newGame) {
+  play8BitBeep(450, 0.08);
+  activeGame = newGame;
+  
+  if (btnSelectSnake) btnSelectSnake.classList.toggle('active', newGame === 'snake');
+  if (btnSelectTetris) btnSelectTetris.classList.toggle('active', newGame === 'tetris');
+  if (btnSelectInvaders) btnSelectInvaders.classList.toggle('active', newGame === 'invaders');
+  
+  initSelectedGame();
+}
+
+if (btnSelectSnake) btnSelectSnake.addEventListener('click', () => changeActiveGame('snake'));
+if (btnSelectTetris) btnSelectTetris.addEventListener('click', () => changeActiveGame('tetris'));
+if (btnSelectInvaders) btnSelectInvaders.addEventListener('click', () => changeActiveGame('invaders'));
+
+const btnDiffEasy = document.getElementById('btn-diff-easy');
+const btnDiffNormal = document.getElementById('btn-diff-normal');
+const btnDiffHard = document.getElementById('btn-diff-hard');
+const btnDiffTurbo = document.getElementById('btn-diff-turbo');
+const diffVal = document.getElementById('diff-val');
+
+function changeDifficulty(diff) {
+  play8BitBeep(480, 0.06);
+  systemDifficulty = diff;
+  diffVal.textContent = diff.toUpperCase();
+  
+  if (btnDiffEasy) btnDiffEasy.classList.toggle('active', diff === 'easy');
+  if (btnDiffNormal) btnDiffNormal.classList.toggle('active', diff === 'normal');
+  if (btnDiffHard) btnDiffHard.classList.toggle('active', diff === 'hard');
+  if (btnDiffTurbo) btnDiffTurbo.classList.toggle('active', diff === 'turbo');
+  
+  initSelectedGame();
+}
+
+if (btnDiffEasy) btnDiffEasy.addEventListener('click', () => changeDifficulty('easy'));
+if (btnDiffNormal) btnDiffNormal.addEventListener('click', () => changeDifficulty('normal'));
+if (btnDiffHard) btnDiffHard.addEventListener('click', () => changeDifficulty('hard'));
+if (btnDiffTurbo) btnDiffTurbo.addEventListener('click', () => changeDifficulty('turbo'));
+
+if (gToggleRunBtn) gToggleRunBtn.addEventListener('click', toggleGamePause);
+if (gOverlayStartBtn) gOverlayStartBtn.addEventListener('click', () => startGameLoop());
+
+// Mobile Controls
+const bindCtrl = (id, key) => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener('click', () => { play8BitBeep(400, 0.03); handleGameInput(key); });
+};
+bindCtrl('btn-ctrl-up', 'ArrowUp');
+bindCtrl('btn-ctrl-down', 'ArrowDown');
+bindCtrl('btn-ctrl-left', 'ArrowLeft');
+bindCtrl('btn-ctrl-right', 'ArrowRight');
+
+const btnCtrlA = document.getElementById('btn-ctrl-a');
+if (btnCtrlA) btnCtrlA.addEventListener('click', () => {
+  play8BitBeep(500, 0.04);
+  if (activeGame === 'tetris') handleGameInput('ArrowUp');
+  else if (activeGame === 'invaders') shootInvaderLaser();
+});
+
+const btnCtrlB = document.getElementById('btn-ctrl-b');
+if (btnCtrlB) btnCtrlB.addEventListener('click', () => {
+  play8BitBeep(500, 0.04);
+  if (activeGame === 'tetris') handleGameInput('ArrowUp');
+  else if (activeGame === 'invaders') shootInvaderLaser();
+});
+
+// Run initial UI update so stored high scores load instantly on page load
+updateScoreUI();
+
+// ============================================================================
+//                       YOUTUBE MUSIC STREAMING INTEGRATION
+// ============================================================================
+
+// 1. Tab Navigation between Local Cassette and YouTube Search
+const btnTabLocal = document.getElementById('btn-tab-local');
+const btnTabYt = document.getElementById('btn-tab-yt');
+const panelLocalTape = document.getElementById('panel-local-tape');
+const panelYtMusic = document.getElementById('panel-yt-music');
+
+if (btnTabLocal && btnTabYt && panelLocalTape && panelYtMusic) {
+  btnTabLocal.addEventListener('click', () => {
+    play8BitBeep(440, 0.05);
+    btnTabLocal.classList.add('active');
+    btnTabYt.classList.remove('active');
+    panelLocalTape.style.display = 'block';
+    panelYtMusic.style.display = 'none';
+  });
+
+  btnTabYt.addEventListener('click', () => {
+    play8BitBeep(440, 0.05);
+    btnTabLocal.classList.remove('active');
+    btnTabYt.classList.add('active');
+    panelLocalTape.style.display = 'none';
+    panelYtMusic.style.display = 'flex';
+  });
+}
+
+// 2. YouTube Search Handler
+const ytSearchInput = document.getElementById('yt-search-input');
+const ytSearchBtn = document.getElementById('yt-search-btn');
+const ytResultsList = document.getElementById('yt-results-list');
+
+async function performYtSearch() {
+  if (!ytSearchInput || !ytResultsList) return;
+  const q = ytSearchInput.value.trim();
+  if (!q) return;
+  
+  play8BitBeep(520, 0.05);
+  ytResultsList.innerHTML = `
+    <li class="track-entry" style="opacity: 0.8; justify-content: center; text-align: center; padding: 25px 0;">
+      <span class="pulse-text">📡 SCANNING SKIES FOR "${q.toUpperCase()}"...</span>
+    </li>
+  `;
+  
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    
+    if (data.results && data.results.length > 0) {
+      ytPlaylist = data.results;
+      ytCurrentIndex = 0;
+      renderYtPlaylistUI();
+    } else {
+      ytResultsList.innerHTML = `
+        <li class="track-entry" style="opacity: 0.8; justify-content: center; text-align: center; padding: 25px 0;">
+          <span>❌ NO SIGNALS RECEIVED. TRY ANOTHER QUERY.</span>
+        </li>
+      `;
+    }
+  } catch (err) {
+    console.error('Search fetch failed:', err);
+    ytResultsList.innerHTML = `
+      <li class="track-entry" style="opacity: 0.8; justify-content: center; text-align: center; padding: 25px 0;">
+        <span>⚠️ TELEMETRY CONNECTION ERROR.</span>
+      </li>
+    `;
+  }
+}
+
+if (ytSearchBtn) ytSearchBtn.addEventListener('click', performYtSearch);
+if (ytSearchInput) {
+  ytSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') performYtSearch();
+  });
+}
+
+// 3. Render YouTube Playlist Results
+function renderYtPlaylistUI() {
+  if (!ytResultsList) return;
+  if (ytPlaylist.length === 0) {
+    ytResultsList.innerHTML = `
+      <li class="track-entry" style="opacity: 0.5; justify-content: center; text-align: center; padding: 25px 0;">
+        <span>🔍 Enter query to scan the skies...</span>
+      </li>
+    `;
+    return;
+  }
+  ytResultsList.innerHTML = '';
+  
+  ytPlaylist.forEach((track, i) => {
+    const li = document.createElement('li');
+    const isCurrentYt = (currentSource === 'youtube' && i === ytCurrentIndex);
+    li.className = `track-entry ${isCurrentYt ? 'active' : ''}`;
+    li.style.display = 'flex';
+    li.style.alignItems = 'center';
+    li.style.gap = '8px';
+    li.style.padding = '6px 8px';
+    li.style.fontSize = '12px';
+    li.style.cursor = 'pointer';
+    
+    li.innerHTML = `
+      <img src="${track.thumbnail}" style="width: 24px; height: 24px; border-radius: 2px; object-fit: cover; border: 1px solid rgba(0,240,255,0.25);" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22 viewBox=%220 0 50 50%22><rect width=%2250%22 height=%2250%22 fill=%22%23140a24%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%2300f0ff%22 font-family=%22monospace%22 font-size=%2212%22>YT</text></svg>'" />
+      <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        <span style="display: block; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${track.title}</span>
+        <span style="display: block; font-size: 10px; opacity: 0.6; overflow: hidden; text-overflow: ellipsis;">${track.artist}</span>
+      </div>
+      <span style="font-size: 10px; opacity: 0.5;">${track.duration}</span>
+    `;
+    
+    li.addEventListener('click', () => {
+      play8BitBeep(520, 0.08);
+      loadYtTrack(i);
+    });
+    ytResultsList.appendChild(li);
+  });
+}
+
+// 4. Load & Play YouTube Track
+function loadYtTrack(index) {
+  if (index < 0 || index >= ytPlaylist.length) return;
+  
+  currentSource = 'youtube';
+  ytCurrentIndex = index;
+  
+  // Pause any local audio playing
+  audio.pause();
+  
+  const track = ytPlaylist[index];
+  titleEl.textContent = track.title;
+  artistEl.textContent = track.artist.toUpperCase();
+  
+  if (track.thumbnail) {
+    coverImg.src = track.thumbnail;
+  } else {
+    coverImg.src = 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22250%22 viewBox=%220 0 400 250%22><rect width=%22400%22 height=%22250%22 fill=%22%23140a24%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%2300f0ff%22 font-family=%22monospace%22 font-size=%2216%22>YOUTUBE LO-FI</text></svg>';
+  }
+  
+  trackBadge.textContent = `${String(index + 1).padStart(2, '0')}/${String(ytPlaylist.length).padStart(2, '0')}`;
+  progressFill.style.width = '0%';
+  currentTimeEl.textContent = "00:00";
+  totalDurationEl.textContent = track.duration || "00:00";
+  
+  // Refresh rendering to update highlights
+  renderPlaylist();
+  renderYtPlaylistUI();
+  
+  if (ytPlayerReady && ytPlayer) {
+    try {
+      ytPlayer.loadVideoById(track.id);
+      ytPlayer.setVolume(parseFloat(volumeSlider.value) * 100);
+      updatePlayState(true);
+    } catch(e) {
+      console.error(e);
+    }
+  }
+}
+
+// 5. YouTube Iframe API Loader & Controls
+const tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+const firstScriptTag = document.getElementsByTagName('script')[0];
+firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+window.onYouTubeIframeAPIReady = function() {
+  ytPlayer = new YT.Player('yt-player', {
+    height: '1',
+    width: '1',
+    videoId: '',
+    playerVars: {
+      'autoplay': 0,
+      'controls': 0,
+      'disablekb': 1,
+      'fs': 0,
+      'rel': 0,
+      'modestbranding': 1,
+      'origin': window.location.origin
+    },
+    events: {
+      'onReady': () => {
+        ytPlayerReady = true;
+      },
+      'onStateChange': (event) => {
+        // YT.PlayerState.ENDED is 0
+        if (event.data === 0) {
+          if (isLoop) {
+            ytPlayer.playVideo();
+          } else {
+            nextTrack();
+          }
+        } else if (event.data === 1) { // PLAYING
+          updatePlayState(true);
+        } else if (event.data === 2) { // PAUSED
+          updatePlayState(false);
+        }
+      }
+    }
+  });
+};
+
+// 6. Polling loop to smoothly update search song time progress bar
+setInterval(() => {
+  if (currentSource === 'youtube' && ytPlayerReady && ytPlayer) {
+    try {
+      const state = ytPlayer.getPlayerState();
+      if (state === 1) { // PLAYING
+        const currentTime = ytPlayer.getCurrentTime();
+        const duration = ytPlayer.getDuration();
+        if (duration > 0) {
+          const percent = (currentTime / duration) * 100;
+          progressFill.style.width = `${percent}%`;
+          currentTimeEl.textContent = formatTime(currentTime);
+          totalDurationEl.textContent = formatTime(duration);
+        }
+      }
+    } catch(e) {}
+  }
+}, 350);
+
+// 7. Sync volume changes with YouTube Player
+volumeSlider.addEventListener('input', (e) => {
+  if (currentSource === 'youtube' && ytPlayerReady && ytPlayer) {
+    try {
+      ytPlayer.setVolume(parseFloat(e.target.value) * 100);
+    } catch(e) {}
+  }
+});
+
+// 8. Run Initial Page Load Setup after all DOM selectors are fully declared
 audio.volume = 0.75;
 loadTrack(currentIndex);
 updateDistanceRadar('jakarta');

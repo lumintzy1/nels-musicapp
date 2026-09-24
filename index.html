@@ -5,14 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RETRO//OS - LO-FI CASSETTE & WEATHER RADAR WORKSTATION</title>
   
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      const errStr = message + ' | Line: ' + lineno + ' | Source: ' + (source ? source.substring(source.lastIndexOf('/')) : 'unknown');
+      console.error("FATAL:", errStr);
+      const banner = document.getElementById('runtime-error-banner');
+      const msg = document.getElementById('runtime-error-msg');
+      if (banner && msg) {
+        msg.textContent = errStr;
+        banner.style.display = 'block';
+      }
+      return false;
+    };
+    window.onunhandledrejection = function(event) {
+      console.error("REJECTION:", event.reason);
+      const banner = document.getElementById('runtime-error-banner');
+      const msg = document.getElementById('runtime-error-msg');
+      if (banner && msg) {
+        msg.textContent = "Promise Rejection: " + event.reason;
+        banner.style.display = 'block';
+      }
+    };
+  </script>
+
   <!-- Font Pixel Google -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
+  <div id="runtime-error-banner" style="display:none; background:#ff003c; color:#fff; font-family:monospace; font-size:12px; padding:15px; position:fixed; top:0; left:0; right:0; z-index:99999; border-bottom:4px solid #000; text-align:left;">
+    <strong>[SYSTEM FATAL ERROR]:</strong> <span id="runtime-error-msg"></span>
+  </div>
   <canvas id="retro-canvas"></canvas>
   <div class="retro-pillar pillar-right"></div>
 
@@ -32,6 +58,11 @@
       <button class="dock-item" id="tab-weather-btn" title="Global Weather Radar">
         <span class="dock-icon">📡</span>
         <span class="dock-label">WEATHER RADAR</span>
+      </button>
+
+      <button class="dock-item" id="tab-games-btn" title="Retro Mini Games">
+        <span class="dock-icon">🎮</span>
+        <span class="dock-label">MINI GAMES</span>
       </button>
     </nav>
 
@@ -240,11 +271,39 @@
             </div>
           </div>
 
-          <div class="playlist-header">
-            <span class="header-tag">📜 [ TAVERN QUESTS ]</span>
-            <span class="header-count" id="track-count">SIDE A // 7 TRK</span>
+          <!-- Music Tab Selectors -->
+          <div class="timer-controls" style="margin-bottom: 12px; border-bottom: 1px solid rgba(0, 240, 255, 0.2); padding-bottom: 8px;">
+            <button class="timer-btn active" id="btn-tab-local" style="font-size: 10px; letter-spacing: 1px; flex: 1;">📜 CASSETTE</button>
+            <button class="timer-btn" id="btn-tab-yt" style="font-size: 10px; letter-spacing: 1px; flex: 1;">🎵 YT MUSIC</button>
           </div>
-          <ul class="quest-tracks" id="track-list-ui"></ul>
+
+          <!-- LOCAL CASSETTE CONTENT -->
+          <div id="panel-local-tape">
+            <div class="playlist-header">
+              <span class="header-tag">📜 [ TAVERN QUESTS ]</span>
+              <span class="header-count" id="track-count">SIDE A // 7 TRK</span>
+            </div>
+            <ul class="quest-tracks" id="track-list-ui"></ul>
+          </div>
+
+          <!-- YOUTUBE SEARCH CONTENT -->
+          <div id="panel-yt-music" style="display: none; flex-direction: column; gap: 8px;">
+            <div class="playlist-header">
+              <span class="header-tag">🎵 [ YT MUSIC INCOMING FEED ]</span>
+              <span class="header-count" id="yt-track-count">ONLINE // INFINITE</span>
+            </div>
+            <div class="search-bar" style="display: flex; gap: 6px; background: rgba(5,2,10,0.8); border: 1px solid rgba(0, 240, 255, 0.25); padding: 4px; border-radius: 4px;">
+              <input type="text" id="yt-search-input" placeholder="Search song, artist, album on YouTube Music..." style="flex: 1; background: transparent; border: none; outline: none; color: #00f0ff; font-family: 'Courier New', monospace; font-size: 11px; padding: 4px;" />
+              <button id="yt-search-btn" class="timer-btn" style="padding: 2px 10px; font-size: 10px;">FIND</button>
+            </div>
+            <div class="custom-scroll" style="overflow-y: auto; max-height: 200px;">
+              <ul class="quest-tracks" id="yt-results-list" style="margin: 0; padding: 0;">
+                <li class="track-entry" style="opacity: 0.5; justify-content: center; text-align: center; padding: 25px 0;">
+                  <span>🔍 Enter query to scan the skies...</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </aside>
       </div>
     </section>
@@ -394,10 +453,208 @@
       </div>
     </section>
 
-    <!-- Hidden audio element -->
+    <!-- VIEW 3: RETRO MINI GAMES -->
+    <section class="view-section" id="view-games">
+      <div class="dashboard-container">
+        
+        <!-- PANEL KIRI: GAME SELECTOR & DIFFICULTY -->
+        <aside class="side-panel left-panel">
+          <div class="corner-metal c-tl"></div>
+          <div class="corner-metal c-tr"></div>
+          <div class="corner-metal c-bl"></div>
+          <div class="corner-metal c-br"></div>
+
+          <div class="panel-header">
+            <span>🎮 [ ARCADE SYSTEM ]</span>
+          </div>
+
+          <div class="game-selector-controls">
+            <button class="game-select-btn active" id="btn-select-snake" data-game="snake">
+              <span class="game-select-icon">🐍</span>
+              <span class="game-select-label">NEON SERPENT</span>
+            </button>
+            <button class="game-select-btn" id="btn-select-tetris" data-game="tetris">
+              <span class="game-select-icon">🧱</span>
+              <span class="game-select-label">BLOCK STACKER</span>
+            </button>
+            <button class="game-select-btn" id="btn-select-invaders" data-game="invaders">
+              <span class="game-select-icon">🚀</span>
+              <span class="game-select-label">NEON DEFENDER</span>
+            </button>
+          </div>
+
+          <!-- Difficulty selection -->
+          <div class="tape-pitch-box game-speed-box">
+            <div class="pitch-header">
+              <span>⚡ CPU DIFFICULTY</span>
+              <span id="diff-val">NORMAL</span>
+            </div>
+            <div class="pitch-presets" style="display: flex; gap: 4px; width: 100%;">
+              <button class="pitch-btn" id="btn-diff-easy" style="flex: 1;">EASY</button>
+              <button class="pitch-btn active" id="btn-diff-normal" style="flex: 1;">NORM</button>
+              <button class="pitch-btn" id="btn-diff-hard" style="flex: 1;">HARD</button>
+              <button class="pitch-btn" id="btn-diff-turbo" style="flex: 1; color: var(--neon-pink); border-color: var(--neon-pink);">TURBO</button>
+            </div>
+          </div>
+
+          <!-- System status box -->
+          <div class="adventurer-box">
+            <div class="char-header">
+              <span class="char-icon">🕹️</span>
+              <div class="char-title">
+                <span class="char-name">ARCADE CORE</span>
+                <span class="char-level">8-BIT CPU // 4.77 MHz</span>
+              </div>
+            </div>
+
+            <div class="char-bars">
+              <div class="bar-row">
+                <span>CPU TEMP</span>
+                <div class="bar-bg"><div class="bar-fill hp-fill" style="width: 42%;"></div></div>
+              </div>
+              <div class="bar-row">
+                <span>MEM LOAD</span>
+                <div class="bar-bg"><div class="bar-fill mp-fill" style="width: 28%;"></div></div>
+              </div>
+            </div>
+
+            <p class="tavern-dialogue">"Relive the retro neon nostalgia. Tap instructions or use keyboard arrow keys."</p>
+          </div>
+        </aside>
+
+        <!-- PANEL TENGAH: THE ACTIVE GAME CONSOLE -->
+        <main class="relic-frame">
+          <div class="corner-metal c-tl"></div>
+          <div class="corner-metal c-tr"></div>
+          <div class="corner-metal c-bl"></div>
+          <div class="corner-metal c-br"></div>
+
+          <header class="relic-header">
+            <div class="gem-badge">
+              <span class="rune-gem" id="game-rune-gem"></span>
+              <span class="relic-title" id="game-panel-title">NEON SERPENT</span>
+            </div>
+            <div class="track-index" id="game-high-badge">HI: 0000</div>
+          </header>
+
+          <!-- Bezel Screen Game -->
+          <section class="screen-chassis">
+            <div class="screen-bezel">
+              <div class="media-container crt-active" id="game-screen-container" style="background: #090512; border: 2px solid var(--relic-border-inner); position: relative; height: 350px; display: flex; align-items: center; justify-content: center;">
+                <!-- Active canvas element for games -->
+                <canvas id="game-canvas" width="400" height="350" style="display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; z-index: 2;"></canvas>
+                
+                <div class="crt-scanlines" style="z-index: 5;"></div>
+                
+                <!-- Game Over / Start Overlay -->
+                <div id="game-overlay" class="game-overlay" style="position: absolute; inset: 0; background: rgba(12, 7, 24, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 10; padding: 20px; font-family: 'Press Start 2P', monospace;">
+                  <div class="overlay-content">
+                    <h2 id="overlay-title" class="pixel-heading" style="color: var(--neon-pink); font-size: 16px; margin-bottom: 20px; text-shadow: 0 0 10px rgba(255, 42, 133, 0.6); font-family: 'Press Start 2P', monospace; line-height: 1.4;">NEON SERPENT</h2>
+                    <p id="overlay-instructions" class="pixel-p" style="color: var(--relic-cyan); font-size: 8px; margin-bottom: 25px; line-height: 1.8; font-family: 'Press Start 2P', monospace;">PRESS START / [ SPACEBAR ] TO PLAY</p>
+                    <button class="pixel-start-btn" id="btn-overlay-start" style="background: transparent; border: 2px solid var(--relic-cyan); color: var(--relic-cyan); font-family: 'Press Start 2P', monospace; font-size: 10px; padding: 10px 20px; cursor: pointer; box-shadow: 0 0 10px var(--relic-cyan-glow); outline: none;">START RUN</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Score & Level Tracker -->
+          <section class="scroll-banner">
+            <div class="scroll-icon">🎮</div>
+            <div class="game-metrics-row" style="display: flex; gap: 20px; width: 100%; justify-content: space-around; font-family: 'Press Start 2P', monospace; font-size: 9px;">
+              <div class="metric-item">
+                <span class="m-label" style="color: var(--text-muted);">SCORE:</span>
+                <span class="m-val" id="game-score" style="color: var(--relic-green);">0000</span>
+              </div>
+              <div class="metric-item">
+                <span class="m-label" style="color: var(--text-muted);">HI-SCORE:</span>
+                <span class="m-val" id="game-hi-score" style="color: var(--relic-amber);">0000</span>
+              </div>
+              <div class="metric-item">
+                <span class="m-label" style="color: var(--text-muted);">LEVEL:</span>
+                <span class="m-val" id="game-level" style="color: var(--relic-cyan);">01</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Mobile D-pad and Controls Overlay -->
+          <section class="game-controls-chassis" style="background: rgba(13, 7, 24, 0.7); border: 2px solid var(--relic-border-inner); padding: 15px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-top: 15px; gap: 15px;">
+            <div class="dpad-container" style="display: grid; grid-template-columns: 40px 40px 40px; grid-template-rows: 40px 40px 40px; gap: 4px; width: 124px;">
+              <div style="grid-column: 1; grid-row: 1;"></div>
+              <button class="dpad-btn btn-up" id="btn-ctrl-up" style="grid-column: 2; grid-row: 1; background: var(--relic-stone); border: 2px solid var(--relic-border-inner); color: var(--relic-cyan); font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; outline: none; border-radius: 4px;">▲</button>
+              <div style="grid-column: 3; grid-row: 1;"></div>
+              <button class="dpad-btn btn-left" id="btn-ctrl-left" style="grid-column: 1; grid-row: 2; background: var(--relic-stone); border: 2px solid var(--relic-border-inner); color: var(--relic-cyan); font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; outline: none; border-radius: 4px;">◀</button>
+              <div class="dpad-center" style="grid-column: 2; grid-row: 2; background: var(--relic-stone-dark); border: 2px solid var(--relic-border-outer); border-radius: 50%;"></div>
+              <button class="dpad-btn btn-right" id="btn-ctrl-right" style="grid-column: 3; grid-row: 2; background: var(--relic-stone); border: 2px solid var(--relic-border-inner); color: var(--relic-cyan); font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; outline: none; border-radius: 4px;">▶</button>
+              <div style="grid-column: 1; grid-row: 3;"></div>
+              <button class="dpad-btn btn-down" id="btn-ctrl-down" style="grid-column: 2; grid-row: 3; background: var(--relic-stone); border: 2px solid var(--relic-border-inner); color: var(--relic-cyan); font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; outline: none; border-radius: 4px;">▼</button>
+              <div style="grid-column: 3; grid-row: 3;"></div>
+            </div>
+            <div class="action-buttons-container" style="display: flex; flex-direction: column; gap: 8px; flex: 1; justify-content: center; align-items: flex-end;">
+              <button class="action-btn-retro btn-a" id="btn-ctrl-a" style="width: 100%; max-width: 160px; height: 38px; background: var(--neon-pink-dark); border: 2px solid var(--neon-pink); color: var(--relic-parchment); font-family: 'Press Start 2P', monospace; font-size: 8px; border-radius: 4px; cursor: pointer; box-shadow: 0 0 5px rgba(255, 42, 133, 0.4); outline: none;">A (ROTATE)</button>
+              <button class="action-btn-retro btn-b" id="btn-ctrl-b" style="width: 100%; max-width: 160px; height: 38px; background: #0066aa; border: 2px solid var(--relic-cyan); color: var(--relic-parchment); font-family: 'Press Start 2P', monospace; font-size: 8px; border-radius: 4px; cursor: pointer; box-shadow: 0 0 5px var(--relic-cyan-glow); outline: none;">B (FIRE / T-SPIN)</button>
+            </div>
+          </section>
+
+          <!-- Game Controls Footer -->
+          <footer class="relic-footer" style="margin-top: 15px;">
+            <button class="relic-btn btn-play" id="btn-game-toggle-run" title="Start/Pause Game" style="min-width: 100px; font-family: 'Press Start 2P', monospace; font-size: 8px;">
+              <div id="game-toggle-icon">START</div>
+            </button>
+            <div class="tavern-seal">SYSTEM EMULATOR // V1.0</div>
+          </footer>
+        </main>
+
+        <!-- PANEL KANAN: HOW TO PLAY & RETRO SCORES -->
+        <aside class="side-panel right-panel">
+          <div class="corner-metal c-tl"></div>
+          <div class="corner-metal c-tr"></div>
+          <div class="corner-metal c-bl"></div>
+          <div class="corner-metal c-br"></div>
+
+          <div class="clock-box" style="height: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="clock-date" style="font-size: 9px; border-bottom: 1px solid var(--relic-border-inner); padding-bottom: 5px;">CURRENT INSTRUCTIONS</div>
+            <div class="instructions-box" id="game-instructions-box" style="font-family: 'Silkscreen', cursive; font-size: 11px; line-height: 1.6; color: var(--relic-parchment); text-align: left;">
+              🐍 NEON SERPENT:<br>
+              - ARROW KEYS to slide neon serpent.<br>
+              - Eat glowing nodes to grow & score.<br>
+              - Avoid walls and your own tail!<br>
+              - Mobile: Use D-pad buttons below.
+            </div>
+          </div>
+
+          <div class="playlist-header" style="margin-top: 15px;">
+            <span class="header-tag">🏆 [ LEADERBOARD ]</span>
+          </div>
+          <ul class="quest-tracks" id="game-leaderboard">
+            <li class="track-entry active">
+              <span>01. CHIPMASTER</span>
+              <span style="opacity: 0.8;">9999 pts</span>
+            </li>
+            <li class="track-entry">
+              <span>02. VECTREX</span>
+              <span style="opacity: 0.8;">5420 pts</span>
+            </li>
+            <li class="track-entry">
+              <span>03. LOFI_FAN_89</span>
+              <span style="opacity: 0.8;">3200 pts</span>
+            </li>
+            <li class="track-entry" id="user-score-row">
+              <span>04. YOU (GUEST)</span>
+              <span style="opacity: 0.8;" id="user-leaderboard-score">0000 pts</span>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Hidden audio elements -->
     <audio id="audio-element"></audio>
+    <div id="yt-player-container" style="position: absolute; width: 1px; height: 1px; opacity: 0.001; pointer-events: none; overflow: hidden; left: -9999px;">
+      <div id="yt-player"></div>
+    </div>
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>

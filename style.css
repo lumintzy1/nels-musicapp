@@ -1485,3 +1485,70 @@ input[type="range"]::-webkit-slider-thumb {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================= RETRO MINI GAMES STYLING ================= */
+.game-selector-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+
+.game-select-btn {
+  background: var(--relic-stone-dark);
+  border: 2px solid var(--relic-border-inner);
+  border-radius: 4px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  text-align: left;
+  outline: none;
+  width: 100%;
+}
+
+.game-select-btn:hover {
+  border-color: var(--relic-cyan);
+  color: var(--relic-parchment);
+  box-shadow: 0 0 8px var(--relic-cyan-glow);
+}
+
+.game-select-btn.active {
+  background: var(--relic-stone);
+  border-color: var(--neon-pink);
+  color: var(--relic-parchment);
+  box-shadow: 0 0 10px rgba(255, 42, 133, 0.4);
+}
+
+.game-select-btn .game-select-icon {
+  font-size: 16px;
+}
+
+.game-select-btn.active .game-select-icon {
+  animation: pulse 1.5s infinite;
+}
+
+.dpad-btn:active {
+  background: var(--relic-border-inner) !important;
+  color: var(--relic-parchment) !important;
+  box-shadow: 0 0 8px var(--relic-cyan-glow) !important;
+}
+
+.action-btn-retro:active {
+  transform: scale(0.96);
+  filter: brightness(1.2);
+}
+
+.quest-tracks .track-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+}
